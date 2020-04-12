@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import collections, sortedcontainers, datetime
 from tqdm import tqdm
-from item import TickData, Snapshot, OrderData
-from typing import List
+from item import TickData, Snapshot, OrderData, make_order, get_order
+from typing import List, Dict
 from constant import OrderType, Direction, Offset, Status
 
 # 一个对 simnow 模拟算法的改进方案：
@@ -38,9 +38,9 @@ class OrderQueue:
     def add_order(self, order: OrderData):
         self.queue.append(order)
 
-    def consume_order(self, amount: float) -> float:
+    def match_order(self, amount: float) -> float:
         '''
-        consume orders by given amount, return remaining amount that is not consumed.
+        match orders by given amount, return remaining amount that is not consumed.
         using FIFO algorithm currently
         '''
         last_idx = 0
@@ -49,85 +49,101 @@ class OrderQueue:
                 last_idx = idx
                 if amount == self.queue[idx].volume:
                     last_idx += 1
-                # TODO: finish order in queue[0:last_idx]
+                # TODO: callback order in queue[0:last_idx]
                 self.queue = self.queue[last_idx:]
                 return 0
             else:
                 amount -= self.queue[idx].volume
-        # TODO: finish order in queue
+        # TODO: callback order in queue
         self.queue = []
         return amount
 
     def total_amount(self):
         return sum(map(lambda o: o.volume, self.queue))
 
+    def cancel_data_order(self, volume: float):
+        # TODO: cancel order from history data
+        pass
+
+    def cancel_algo_order(self, order_id: int):
+        # TODO: cancel order from backtesting quant strategy
+        pass
 
 class Future:
+    buy_book: Dict[float, OrderQueue]
+    sell_book: Dict[float, OrderQueue]
+    order_dict: Dict[int, OrderData]
+
     def __init__(self, symbol: str, tick: TickData, max_depth: int):
         self.symbol = symbol
         self.max_depth = max_depth
         self.buy_book = sortedcontainers.SortedDict()
         self.sell_book = sortedcontainers.SortedDict()
         for idx in range(tick.data_depth):
-            self.buy_book[tick.bid_price] = OrderQueue()
-        self.buy_book.update(zip(tick.bid_price, tick.bid_volume))
-        self.sell_book.update(zip(tick.ask_price, tick.ask_volume))
+            q = OrderQueue()
+            q.add_order(make_order({'volume': tick.bid_volume[idx]}))
+            self.buy_book[tick.bid_price[idx]] = q
+            q = OrderQueue()
+            q.add_order(make_order({'volume': tick.ask_volume[idx]}))
+            self.sell_book[tick.ask_price[idx]] = q
 
-    def add_signal(self, order_type, price, volume):
-        if volume == 0:
+    def place_order(self, order: OrderData):
+        if order.volume == 0:
             return
-        if order_type == 'buy':
-            sell_prices = list(self.sell_book.keys())
-            if len(sell_prices) > 0 and price >= sell_prices[0]:
+        if order.order_type == OrderType.LIMIT:
+            if order.direction == Direction.LONG and order.offset == Offset.OPEN or order.direction == Direction.SHORT and order.offset == Offset.CLOSE:
+                sell_prices = list(self.sell_book.keys())
                 for sp in sell_prices:
-                    if sp > price:
+                    if sp > order.price:
                         break
-                    if volume >= self.sell_book[sp]:
-                        volume -= self.sell_book[sp]
+                    order.volume = self.sell_book[sp].match_order(order.volume)
+                    if order.volume > 0:
                         del self.sell_book[sp]
                     else:
-                        self.sell_book[sp] -= volume
-                        volume = 0
                         break
-                if volume > 0:
-                    self.buy_book[price] = volume
-            else:
-                if price in self.buy_book:
-                    self.buy_book[price] += volume
-                else:
-                    self.buy_book[price] = volume
-        elif order_type == 'sell':
-            buy_prices = list(reversed(self.buy_book.keys()))
-            if len(buy_prices) > 0 and price <= buy_prices[0]:
+                if order.volume > 0:
+                    if order.price not in self.buy_book:
+                        self.buy_book[order.price] = OrderQueue()
+                    self.buy_book[order.price].add_order(order)
+            elif order.direction == Direction.SHORT and order.offset == Offset.OPEN or order.direction == Direction.LONG and order.offset == Offset.CLOSE:
+                buy_prices = list(reversed(self.buy_book.keys()))
                 for bp in buy_prices:
                     if bp < price:
                         break
-                    if volume >= self.buy_book[bp]:
-                        volume -= self.buy_book[bp]
-                        del self.buy_book[bp]
+                    order.volume = self.buy_book[bp].match_order(order.volume)
+                    if order.volume > 0:
+                        del self.buy_book[sp]
                     else:
-                        self.buy_book[bp] -= volume
-                        volume = 0
                         break
-                if volume > 0:
-                    self.sell_book[price] = volume
-            else:
-                if price in self.sell_book:
-                    self.sell_book[price] += volume
-                else:
-                    self.sell_book[price] = volume
-        elif order_type == 'cancel':
-            if price in self.sell_book:
-                self.sell_book[price] -= volume
-                if self.sell_book[price] == 0:
-                    del self.sell_book[price]
-            if price in self.buy_book:
-                self.buy_book[price] -= volume
-                if self.buy_book[price] == 0:
-                    del self.buy_book[price]
+                if order.volume > 0:
+                    if order.price not in self.sell_book:
+                        self.sell_book[order.price] = OrderQueue()
+                    self.sell_book[order.price].add_order(order)
+        elif order.order_type == OrderType.MARKET:
+            pass
+        else:
+            pass
 
-    def place_order(self, order: OrderData):
-        pass
+    def cancel_data_order(self, price: float, volume: float):
+        if price in self.sell_book:
+            self.sell_book[price].cancel_data_order(volume)
+            if self.sell_book[price].total_amount() == 0:
+                del self.sell_book[price]
+        if price in self.buy_book:
+            self.buy_book[price].cancel_data_order(volume)
+            if self.buy_book[price].total_amount() == 0:
+                del self.buy_book[price]
+
+    def cancel_order(self, order_id: int):
+        order = get_order(order_id)
+        if order.price in self.sell_book:
+            self.sell_book[order.price].cancel_algo_order(order_id)
+            if self.sell_book[order.price].total_amount() == 0:
+                del self.sell_book[order.price]
+        if order.price in self.buy_book:
+            self.buy_book[order.price].cancel_algo_order(order_id)
+            if self.buy_book[order.price].total_amount() == 0:
+                del self.buy_book[order.price]
 
     def snapshot(self) -> TickData:
         sps = list(self.sell_book.keys())[:5]
@@ -137,15 +153,14 @@ class Future:
         tick.set_data_depth(depth)
         for i in range(depth):
             tick.bid_price[i] = bps[i]
-            tick.bid_volume[i] = self.buy_book[bps[i]]
+            tick.bid_volume[i] = self.buy_book[bps[i]].total_amount()
             tick.ask_price[i] = sps[i]
-            tick.ask_volume[i] = self.sell_book[sps[i]]
+            tick.ask_volume[i] = self.sell_book[sps[i]].total_amount()
         return tick
 
 
 class Exchange:
     def __init__(self, snapshot: Snapshot, max_depth: int):
-        self.order_count = 0
         self.futures = {}
         for k in snapshot.keys():
             self.futures[k] = Future(k, snapshot[k], max_depth)
@@ -158,16 +173,15 @@ class Exchange:
 
     def place_order(self, symbol: str, order_type: OrderType, direction: Direction, offset: Offset, price: float,
                     volume: float) -> OrderData:
-        order = OrderData()
-        order.order_id = self.order_count
-        self.order_count += 1
+        order = make_order({
+            'symbol': symbol,
+            'order_type': order_type,
+            'direction': direction,
+            'offset': offset,
+            'price': price,
+            'volume': volume
+        })
         order.submit_time = datetime.datetime.now()
-        order.symbol = symbol
-        order.order_type = order_type
-        order.direction = direction
-        order.offset = offset
-        order.price = price
-        order.volume = volume
         order.traded = 0
         order.status = Status.SUBMITTING
 
