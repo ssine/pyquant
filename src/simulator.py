@@ -1,78 +1,109 @@
 import pandas as pd
 import numpy as np
-import collections, sortedcontainers, datetime
+import collections, sortedcontainers, datetime, sys
 from tqdm import tqdm
-from item import TickData, Snapshot, OrderData, make_order, get_order
-from typing import List, Dict
+from item import TickData, Snapshot, OrderData
+from typing import List, Dict, Tuple
+from inspect import isfunction
 from constant import OrderType, Direction, Offset, Status
 
-# 一个对 simnow 模拟算法的改进方案：
-#
-# 1. 通过两个 tick 之间数据的变化推测出本次 tick 内的订单情况
-# 2. 将模拟的订单插入 order book ，这样会有一个排队位置
-# 3. 在其他订单 consume 当前队列时进行模拟成交
 '''
 TODO:
-* support multiple futures
 * consider last trade information(on event generation)
-* shadow orders
-  * 照常排队
-  * 与实际订单同步执行
-  * 在当前队列消耗完毕时强制成交
-* 订单完成时如何通知算法?
-  * 消息机制
-  * 回调函数
+* visualization
 '''
-
 
 class OrderQueue:
     '''
     in the bid/ask book, there is an order book for each price, consisted of
     all the orders on this price level.
     '''
-    queue: List[OrderData]
+    queue: List[Tuple[OrderData, List[OrderData]]]
+    next_orders: List[OrderData]
 
     def __init__(self):
         self.queue = []
+        self.next_orders = []
+
+    def __del__(self):
+        self._consume_algo_order_list(self.next_orders, float('inf'))
 
     def add_order(self, order: OrderData):
-        self.queue.append(order)
+        if order.is_history:
+            self.queue.append((order, self.next_orders))
+            self.next_orders = []
+        else:
+            self.next_orders.append(order)
+
+    def _consume_algo_order_list(self, orders: List[OrderData], amount: float):
+        while len(orders) > 0:
+            order = orders[0]
+            if amount >= order.remain():
+                amount -= order.remain()
+                if hasattr(order, 'callback') and isfunction(order.callback):
+                    order.callback()
+                self.queue.pop(0)
+            else:
+                order.traded += amount
+                break
 
     def match_order(self, amount: float) -> float:
         '''
         match orders by given amount, return remaining amount that is not consumed.
         using FIFO algorithm currently
         '''
-        last_idx = 0
-        for idx in range(len(self.queue)):
-            if amount <= self.queue[idx].volume:
-                last_idx = idx
-                if amount == self.queue[idx].volume:
-                    last_idx += 1
-                # TODO: callback order in queue[0:last_idx]
-                self.queue = self.queue[last_idx:]
-                return 0
+        while len(self.queue) > 0:
+            hist_order, algo_orders = self.queue[0]
+            if amount >= hist_order.remain():
+                amount -= hist_order.remain()
+                self._consume_algo_order_list(algo_orders, hist_order.remain())
+                if len(hist_order) > 0:
+                    if len(self.queue) > 0:
+                        self.queue[1][1] = hist_order + self.queue[1][1]
+                    else:
+                        self.next_orders = hist_order + self.next_orders
+                self.queue.pop(0)
             else:
-                amount -= self.queue[idx].volume
-        # TODO: callback order in queue
-        self.queue = []
+                hist_order.traded += amount
+                self._consume_algo_order_list(algo_orders, amount)
+                amount = 0
+                break
         return amount
 
     def total_amount(self):
-        return sum(map(lambda o: o.volume, self.queue))
+        def get_amount(tp):
+            s = tp[0].remain()
+            s += sum(map(lambda o: o.remain(), tp[1]))
+            return s
+        return sum(map(get_amount, self.queue))
 
-    def cancel_data_order(self, volume: float):
-        # TODO: cancel order from history data
-        pass
+    def cancel_data_order(self, amount: float):
+        while len(self.queue) > 0:
+            hist_order, algo_orders = self.queue[0]
+            if amount >= hist_order.remain():
+                amount -= hist_order.remain()
+                if len(hist_order) > 0:
+                    if len(self.queue) > 0:
+                        self.queue[1][1] = hist_order + self.queue[1][1]
+                    else:
+                        self.next_orders = hist_order + self.next_orders
+                self.queue.pop(0)
+            else:
+                hist_order.volume -= amount
+                amount = 0
+                break
+        return amount
 
     def cancel_algo_order(self, order_id: int):
-        # TODO: cancel order from backtesting quant strategy
-        pass
+        for hist, algos in self.queue:
+            for idx, order in enumerate(algos):
+                if order.order_id == order_id:
+                    algos.pop(idx)
+                    return
 
 class Future:
     buy_book: Dict[float, OrderQueue]
     sell_book: Dict[float, OrderQueue]
-    order_dict: Dict[int, OrderData]
 
     def __init__(self, symbol: str, tick: TickData, max_depth: int):
         self.symbol = symbol
@@ -81,10 +112,10 @@ class Future:
         self.sell_book = sortedcontainers.SortedDict()
         for idx in range(tick.data_depth):
             q = OrderQueue()
-            q.add_order(make_order({'volume': tick.bid_volume[idx]}))
+            q.add_order(OrderData({'volume': tick.bid_volume[idx]}))
             self.buy_book[tick.bid_price[idx]] = q
             q = OrderQueue()
-            q.add_order(make_order({'volume': tick.ask_volume[idx]}))
+            q.add_order(OrderData({'volume': tick.ask_volume[idx]}))
             self.sell_book[tick.ask_price[idx]] = q
 
     def place_order(self, order: OrderData):
@@ -135,7 +166,7 @@ class Future:
                 del self.buy_book[price]
 
     def cancel_order(self, order_id: int):
-        order = get_order(order_id)
+        order = OrderData.get_order(order_id)
         if order.price in self.sell_book:
             self.sell_book[order.price].cancel_algo_order(order_id)
             if self.sell_book[order.price].total_amount() == 0:
@@ -172,8 +203,8 @@ class Exchange:
             print(f'future {symbol} not exist!')
 
     def place_order(self, symbol: str, order_type: OrderType, direction: Direction, offset: Offset, price: float,
-                    volume: float) -> OrderData:
-        order = make_order({
+                    volume: float, is_history: bool = False) -> OrderData:
+        order = OrderData({
             'symbol': symbol,
             'order_type': order_type,
             'direction': direction,

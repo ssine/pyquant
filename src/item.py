@@ -65,7 +65,9 @@ Snapshot = Dict[str, TickData]
 class OrderData:
     order_count: int = 0
     order_dict: Dict[int, 'OrderData'] = {}
+
     symbol: str
+    is_history: bool
     order_id: int
     order_type: OrderType
     direction: Direction
@@ -77,15 +79,18 @@ class OrderData:
     submit_time: dt.datetime
     callback: Callable[['OrderData'], None]
 
-def make_order(d: Dict[str, Any]) -> OrderData:
-    order = OrderData()
-    keys = ['symbol', 'order_type', 'direction', 'offset', 'price', 'volume', 'traded', 'status', 'submit_time']
-    for k in keys:
-        if k in d:
-            setattr(order, k, d[k])
-    OrderData.order_count += 1
-    order.order_id = OrderData.order_count
-    return order
+    def __init__(self, d: Dict[str, Any]):
+        keys = ['symbol', 'is_history', 'order_type', 'direction', 'offset', 'price', 'volume', 'traded', 'status', 'submit_time']
+        for k in keys:
+            if k in d:
+                setattr(self, k, d[k])
+        OrderData.order_count += 1
+        self.order_id = OrderData.order_count
+        OrderData.order_dict[self.order_id] = self
 
-def get_order(id: int) -> OrderData:
-    return OrderData.order_dict[id]
+    def remain(self):
+        return self.volume - self.traded
+
+    @staticmethod
+    def get_order(order_id: int) -> 'OrderData':
+        return OrderData.order_dict[order_id]
