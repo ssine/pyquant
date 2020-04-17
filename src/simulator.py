@@ -57,11 +57,11 @@ class OrderQueue:
             if amount >= hist_order.remain():
                 amount -= hist_order.remain()
                 self._consume_algo_order_list(algo_orders, hist_order.remain())
-                if len(hist_order) > 0:
+                if len(algo_orders) > 0:
                     if len(self.queue) > 0:
-                        self.queue[1][1] = hist_order + self.queue[1][1]
+                        self.queue[1][1] = algo_orders + self.queue[1][1]
                     else:
-                        self.next_orders = hist_order + self.next_orders
+                        self.next_orders = algo_orders + self.next_orders
                 self.queue.pop(0)
             else:
                 hist_order.traded += amount
@@ -76,6 +76,18 @@ class OrderQueue:
             s += sum(map(lambda o: o.remain(), tp[1]))
             return s
         return sum(map(get_amount, self.queue))
+
+    # get the total amount in gui for height calculation
+    def gui_amount(self):
+        algo_height = 0
+        hist_height = 0
+        for hist_order, algo_orders in self.queue:
+            hist_height += hist_order.volume
+            algo_height += sum(map(lambda o: o.volume, algo_orders))
+            if algo_height < hist_height:
+                algo_height = hist_height
+        algo_height += sum(map(lambda o: o.volume, self.next_orders))
+        return algo_height
 
     def cancel_data_order(self, amount: float):
         while len(self.queue) > 0:
@@ -112,10 +124,10 @@ class Future:
         self.sell_book = sortedcontainers.SortedDict()
         for idx in range(tick.data_depth):
             q = OrderQueue()
-            q.add_order(OrderData({'volume': tick.bid_volume[idx]}))
+            q.add_order(OrderData({'volume': tick.bid_volume[idx], 'is_history': True, 'traded': 0}))
             self.buy_book[tick.bid_price[idx]] = q
             q = OrderQueue()
-            q.add_order(OrderData({'volume': tick.ask_volume[idx]}))
+            q.add_order(OrderData({'volume': tick.ask_volume[idx], 'is_history': True, 'traded': 0}))
             self.sell_book[tick.ask_price[idx]] = q
 
     def place_order(self, order: OrderData):
@@ -139,7 +151,7 @@ class Future:
             elif order.direction == Direction.SHORT and order.offset == Offset.OPEN or order.direction == Direction.LONG and order.offset == Offset.CLOSE:
                 buy_prices = list(reversed(self.buy_book.keys()))
                 for bp in buy_prices:
-                    if bp < price:
+                    if bp < order.price:
                         break
                     order.volume = self.buy_book[bp].match_order(order.volume)
                     if order.volume > 0:
@@ -191,6 +203,8 @@ class Future:
 
 
 class Exchange:
+    futures: Dict[str, Future]
+
     def __init__(self, snapshot: Snapshot, max_depth: int):
         self.futures = {}
         for k in snapshot.keys():
@@ -202,19 +216,14 @@ class Exchange:
         else:
             print(f'future {symbol} not exist!')
 
-    def place_order(self, symbol: str, order_type: OrderType, direction: Direction, offset: Offset, price: float,
-                    volume: float, is_history: bool = False) -> OrderData:
-        order = OrderData({
-            'symbol': symbol,
-            'order_type': order_type,
-            'direction': direction,
-            'offset': offset,
-            'price': price,
-            'volume': volume
-        })
+    def place_order(self, d) -> OrderData:
+        if 'is_history' not in d:
+            d['is_history'] = False
+        order = OrderData(d)
         order.submit_time = datetime.datetime.now()
         order.traded = 0
         order.status = Status.SUBMITTING
+        symbol = order.symbol
 
         if symbol in self.futures:
             self.futures[symbol].place_order(order)
