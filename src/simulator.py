@@ -261,7 +261,7 @@ def get_tick_diff(ticks: List[TickData]):
     for idx in tqdm(range(1, data_length), desc='generate tick diff'):
         tick = ticks[idx]
 
-        events = []  # (price, direction, amount)
+        events = []  # (time, price, direction, amount)
 
         last_buy_dict = get_dict_from_tick(last_tick, 'bid')
         last_sell_dict = get_dict_from_tick(last_tick, 'ask')
@@ -277,7 +277,7 @@ def get_tick_diff(ticks: List[TickData]):
                     volume += last_buy_dict[lbp]
                     price = min(price, lbp)
                     del last_buy_dict[lbp]
-            events.append(('sell', price, volume))
+            events.append((tick.time, 'sell', price, volume))
             if tick.bid_price[0] == last_tick.bid_price[0]:
                 del buy_dict[tick.bid_price[0]]
                 del last_buy_dict[tick.bid_price[0]]
@@ -291,7 +291,7 @@ def get_tick_diff(ticks: List[TickData]):
                     volume += last_sell_dict[lsp]
                     price = max(price, lsp)
                     del last_sell_dict[lsp]
-            events.append(('buy', tick.ask_price[0], volume))
+            events.append((tick.time, 'buy', tick.ask_price[0], volume))
             if tick.ask_price[0] == last_tick.ask_price[0]:
                 del sell_dict[tick.ask_price[0]]
                 del last_sell_dict[tick.ask_price[0]]
@@ -302,12 +302,12 @@ def get_tick_diff(ticks: List[TickData]):
                 last_volume = last_buy_dict[bp]
                 del last_buy_dict[bp]
             if buy_dict[bp] > last_volume:
-                events.append(('buy', bp, buy_dict[bp] - last_volume))
+                events.append((tick.time, 'buy', bp, buy_dict[bp] - last_volume))
             elif buy_dict[bp] < last_volume:
-                events.append(('cancel', bp, last_volume - buy_dict[bp]))
+                events.append((tick.time, 'cancel', bp, last_volume - buy_dict[bp]))
             del buy_dict[bp]
         for bp in last_buy_dict:
-            events.append(('cancel', bp, last_buy_dict[bp]))
+            events.append((tick.time, 'cancel', bp, last_buy_dict[bp]))
 
         for sp in list(sell_dict.keys()):
             last_volume = 0
@@ -315,12 +315,12 @@ def get_tick_diff(ticks: List[TickData]):
                 last_volume = last_sell_dict[sp]
                 del last_sell_dict[sp]
             if sell_dict[sp] > last_volume:
-                events.append(('sell', sp, sell_dict[sp] - last_volume))
+                events.append((tick.time, 'sell', sp, sell_dict[sp] - last_volume))
             elif sell_dict[sp] < last_volume:
-                events.append(('cancel', sp, last_volume - sell_dict[sp]))
+                events.append((tick.time, 'cancel', sp, last_volume - sell_dict[sp]))
             del sell_dict[sp]
         for sp in last_sell_dict:
-            events.append(('cancel', sp, last_sell_dict[sp]))
+            events.append((tick.time, 'cancel', sp, last_sell_dict[sp]))
 
         last_tick = tick
         tick_events.append(events)
