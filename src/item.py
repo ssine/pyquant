@@ -19,8 +19,15 @@ class TickData:
     volume: float
     open_interest: float
 
-    def __init__(self):
-        pass
+    def __init__(self, d = {}):
+        if d == {}:
+            pass
+        if 'data_depth' in d:
+            self.set_data_depth(d['data_depth'])
+        keys = ['symbol', 'time', 'last_price', 'last_volume', 'bid_price', 'ask_price', 'bid_volume', 'ask_volume', 'volume', 'open_interest']
+        for k in keys:
+            if k in d:
+                setattr(self, k, d[k])
 
     def set_data_depth(self, data_depth):
         self.data_depth = data_depth
