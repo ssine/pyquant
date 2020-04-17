@@ -18,6 +18,13 @@ class GUI:
     SIDEBAR_ITEM_HEIGHT = 1 * SCALE
     ORDERBOOK_MIDPOINT = (10 * SCALE, 8 * SCALE)
 
+    SELECT_COLOR = '#c8bfe7'
+    BID_COLOR = '#99d9ea'
+    ASK_COLOR = '#ffaec9'
+    BID_ALGO_COLOR = '#45c7ea'
+    ASK_ALGO_COLOR = '#ff4a86'
+    TRADED_COLOR = '#c3c3c3'
+
     def __init__(self, ex: Exchange):
         self.ex = ex
         self.root = tk.Tk()
@@ -54,7 +61,7 @@ class GUI:
         for idx, k in enumerate(ex.futures.keys()):
             color = 'white'
             if k == self.current_future:
-                color = '#d5cfe7'
+                color = GUI.SELECT_COLOR
             cv.create_rectangle(0, idx * SIDEBAR_ITEM_HEIGHT, SIDEBAR_WIDTH, (idx + 1) * SIDEBAR_ITEM_HEIGHT, fill=color)
             cv.create_text(SIDEBAR_WIDTH / 2, (idx + 0.5) * SIDEBAR_ITEM_HEIGHT, text=k)
         cv.create_line(SIDEBAR_WIDTH + SCALE/2, ORDERBOOK_MIDPOINT[1], WIDTH - SCALE/2, ORDERBOOK_MIDPOINT[1], arrow=tk.LAST)
@@ -69,19 +76,28 @@ class GUI:
             cv.create_text(LB[0] + SCALE/2, LB[1] + SCALE/2, text=str(p))
             HIST_Y = LB[1]
             ALGO_Y = LB[1]
+            algo_cmds = [] # draw algo order after history to avoid overlapping
             for hist_order, algo_orders in fut.buy_book[p].queue:
                 prev_y = HIST_Y
                 HIST_Y -= hist_order.volume * ORDER_HEIGHT_SCALE
-                cv.create_rectangle(LB[0], HIST_Y, LB[0] + SCALE, prev_y, fill='#99d9ea')
+                cv.create_rectangle(LB[0], HIST_Y, LB[0] + SCALE, prev_y, fill=GUI.BID_COLOR)
+                if hist_order.traded > 0:
+                    cv.create_rectangle(LB[0], HIST_Y + hist_order.remain() * ORDER_HEIGHT_SCALE, LB[0] + SCALE, prev_y, fill=GUI.TRADED_COLOR)
                 for order in algo_orders:
                     prev_y = ALGO_Y
                     ALGO_Y -= order.volume * ORDER_HEIGHT_SCALE
-                    cv.create_rectangle(LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, fill='#c8bfe7')
+                    algo_cmds.append([LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, GUI.BID_ALGO_COLOR])
+                    if order.traded > 0:
+                        algo_cmds.append([LB[0], ALGO_Y + order.remain() * ORDER_HEIGHT_SCALE, LB[0] + SCALE/2, prev_y, GUI.TRADED_COLOR])
                 ALGO_Y = min(ALGO_Y, HIST_Y)
+            for cmd in algo_cmds:
+                cv.create_rectangle(*cmd[:-1], fill=cmd[-1])
             for order in fut.buy_book[p].next_orders:
                 prev_y = ALGO_Y
                 ALGO_Y -= order.volume * ORDER_HEIGHT_SCALE
-                cv.create_rectangle(LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, fill='#c8bfe7')
+                cv.create_rectangle(LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, fill=GUI.BID_ALGO_COLOR)
+                if order.traded > 0:
+                    cv.create_rectangle(LB[0], ALGO_Y + order.remain() * ORDER_HEIGHT_SCALE, LB[0] + SCALE/2, prev_y, fill=GUI.TRADED_COLOR)
 
             cv.create_text(LB[0] + SCALE/2, ALGO_Y - SCALE/2, text=str((LB[1]-ALGO_Y)/ORDER_HEIGHT_SCALE))
 
@@ -90,19 +106,28 @@ class GUI:
             cv.create_text(LB[0] + SCALE/2, LB[1] + SCALE/2, text=str(p))
             HIST_Y = LB[1]
             ALGO_Y = LB[1]
+            algo_cmds = []
             for hist_order, algo_orders in fut.sell_book[p].queue:
                 prev_y = HIST_Y
                 HIST_Y -= hist_order.volume * ORDER_HEIGHT_SCALE
-                cv.create_rectangle(LB[0], HIST_Y, LB[0] + SCALE, prev_y, fill='#ffaec9')
+                cv.create_rectangle(LB[0], HIST_Y, LB[0] + SCALE, prev_y, fill=GUI.ASK_COLOR)
+                if hist_order.traded > 0:
+                    cv.create_rectangle(LB[0], HIST_Y + hist_order.remain() * ORDER_HEIGHT_SCALE, LB[0] + SCALE, prev_y, fill=GUI.TRADED_COLOR)
                 for order in algo_orders:
                     prev_y = ALGO_Y
                     ALGO_Y -= order.volume * ORDER_HEIGHT_SCALE
-                    cv.create_rectangle(LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, fill='#c8bfe7')
+                    algo_cmds.append([LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, GUI.ASK_ALGO_COLOR])
+                    if order.traded > 0:
+                        algo_cmds.append([LB[0], ALGO_Y + order.remain() * ORDER_HEIGHT_SCALE, LB[0] + SCALE/2, prev_y, GUI.TRADED_COLOR])
                 ALGO_Y = min(ALGO_Y, HIST_Y)
+            for cmd in algo_cmds:
+                cv.create_rectangle(*cmd[:-1], fill=cmd[-1])
             for order in fut.sell_book[p].next_orders:
                 prev_y = ALGO_Y
                 ALGO_Y -= order.volume * ORDER_HEIGHT_SCALE
-                cv.create_rectangle(LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, fill='#c8bfe7')
+                cv.create_rectangle(LB[0], ALGO_Y, LB[0] + SCALE/2, prev_y, fill=GUI.ASK_ALGO_COLOR)
+                if order.traded > 0:
+                    cv.create_rectangle(LB[0], ALGO_Y + order.remain() * ORDER_HEIGHT_SCALE, LB[0] + SCALE/2, prev_y, fill=GUI.TRADED_COLOR)
             cv.create_text(LB[0] + SCALE/2, ALGO_Y - SCALE/2, text=str((LB[1]-ALGO_Y)/ORDER_HEIGHT_SCALE))
 
     def oncanvasclick(self, event):
@@ -170,9 +195,23 @@ if __name__ == '__main__':
 
     gui = GUI(ex)
     gui.set_test_orders([
-        {'price': 633.5, 'volume': 50, 'direction': Direction.LONG, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
-        {'price': 633.5, 'volume': 50, 'direction': Direction.LONG, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
-        {'price': 635.0, 'volume': 50, 'direction': Direction.SHORT, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
-        {'price': 635.0, 'volume': 50, 'direction': Direction.SHORT, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 30, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 20, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 40, 'direction': Direction.LONG, 'is_history': True, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 40, 'direction': Direction.LONG, 'is_history': True, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 15, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
     ])
     gui.start()

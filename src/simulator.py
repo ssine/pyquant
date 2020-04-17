@@ -30,7 +30,7 @@ class OrderQueue:
 
     def add_order(self, order: OrderData):
         if order.is_history:
-            self.queue.append((order, self.next_orders))
+            self.queue.append([order, self.next_orders])
             self.next_orders = []
         else:
             self.next_orders.append(order)
@@ -42,7 +42,7 @@ class OrderQueue:
                 amount -= order.remain()
                 if hasattr(order, 'callback') and isfunction(order.callback):
                     order.callback()
-                self.queue.pop(0)
+                orders.pop(0)
             else:
                 order.traded += amount
                 break
@@ -58,7 +58,7 @@ class OrderQueue:
                 amount -= hist_order.remain()
                 self._consume_algo_order_list(algo_orders, hist_order.remain())
                 if len(algo_orders) > 0:
-                    if len(self.queue) > 0:
+                    if len(self.queue) > 1:
                         self.queue[1][1] = algo_orders + self.queue[1][1]
                     else:
                         self.next_orders = algo_orders + self.next_orders
@@ -76,6 +76,9 @@ class OrderQueue:
             s += sum(map(lambda o: o.remain(), tp[1]))
             return s
         return sum(map(get_amount, self.queue))
+
+    def history_amount(self):
+        return sum(map(lambda tp: tp[0].remain(), self.queue))
 
     # get the total amount in gui for height calculation
     def gui_amount(self):
@@ -155,7 +158,7 @@ class Future:
                         break
                     order.volume = self.buy_book[bp].match_order(order.volume)
                     if order.volume > 0:
-                        del self.buy_book[sp]
+                        del self.buy_book[bp]
                     else:
                         break
                 if order.volume > 0:
@@ -170,22 +173,22 @@ class Future:
     def cancel_data_order(self, price: float, volume: float):
         if price in self.sell_book:
             self.sell_book[price].cancel_data_order(volume)
-            if self.sell_book[price].total_amount() == 0:
+            if self.sell_book[price].history_amount() == 0:
                 del self.sell_book[price]
         if price in self.buy_book:
             self.buy_book[price].cancel_data_order(volume)
-            if self.buy_book[price].total_amount() == 0:
+            if self.buy_book[price].history_amount() == 0:
                 del self.buy_book[price]
 
     def cancel_order(self, order_id: int):
         order = OrderData.get_order(order_id)
         if order.price in self.sell_book:
             self.sell_book[order.price].cancel_algo_order(order_id)
-            if self.sell_book[order.price].total_amount() == 0:
+            if self.sell_book[order.price].history_amount() == 0:
                 del self.sell_book[order.price]
         if order.price in self.buy_book:
             self.buy_book[order.price].cancel_algo_order(order_id)
-            if self.buy_book[order.price].total_amount() == 0:
+            if self.buy_book[order.price].history_amount() == 0:
                 del self.buy_book[order.price]
 
     def snapshot(self) -> TickData:
