@@ -11,7 +11,7 @@ class GUI:
     current_future: str
     ex: Exchange
 
-    SCALE = 40
+    SCALE = 50
     WIDTH = 16 * SCALE # x
     HEIGHT = 9 * SCALE # y
     SIDEBAR_WIDTH = 4 * SCALE
@@ -213,5 +213,20 @@ if __name__ == '__main__':
         {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
         {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
         {'price': 10.3, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 30, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 30, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 15, 'direction': Direction.SHORT, 'is_history': True, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 20, 'direction': Direction.SHORT, 'is_history': True, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 10, 'direction': Direction.SHORT, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 10, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 10, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 10, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.4, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.5, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.5, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
+        {'price': 10.5, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
     ])
     gui.start()
