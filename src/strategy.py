@@ -1,3 +1,5 @@
+from item import TickData
+
 class BaseStrategy:
     def __init__(self):
         pass
@@ -7,7 +9,7 @@ class BaseStrategy:
         pass
     def on_stop(self):
         pass
-    def on_tick(self):
+    def on_tick(self, tk: TickData):
         pass
     def on_trade(self):
         pass
