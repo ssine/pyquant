@@ -20,10 +20,12 @@ class OrderQueue:
     '''
     queue: List[Tuple[OrderData, List[OrderData]]]
     next_orders: List[OrderData]
+    total_amount_var: float
 
     def __init__(self):
         self.queue = []
         self.next_orders = []
+        self.total_amount_var = 0
 
     def __del__(self):
         self._consume_algo_order_list(self.next_orders, float('inf'))
@@ -34,17 +36,20 @@ class OrderQueue:
             self.next_orders = []
         else:
             self.next_orders.append(order)
+        self.total_amount_var += order.remain()
 
     def _consume_algo_order_list(self, orders: List[OrderData], amount: float):
         while len(orders) > 0:
             order = orders[0]
             if amount >= order.remain():
                 amount -= order.remain()
+                self.total_amount_var -= order.remain()
                 if hasattr(order, 'callback') and isfunction(order.callback):
                     order.callback()
                 orders.pop(0)
             else:
                 order.traded += amount
+                self.total_amount_var -= amount
                 break
 
     def match_order(self, amount: float) -> float:
@@ -52,6 +57,7 @@ class OrderQueue:
         match orders by given amount, return remaining amount that is not consumed.
         using FIFO algorithm currently
         '''
+        hist_amount = amount
         while len(self.queue) > 0:
             hist_order, algo_orders = self.queue[0]
             if amount >= hist_order.remain():
@@ -68,14 +74,11 @@ class OrderQueue:
                 self._consume_algo_order_list(algo_orders, amount)
                 amount = 0
                 break
+        self.total_amount_var -= hist_amount - amount
         return amount
 
     def total_amount(self):
-        def get_amount(tp):
-            s = tp[0].remain()
-            s += sum(map(lambda o: o.remain(), tp[1]))
-            return s
-        return sum(map(get_amount, self.queue))
+        return self.total_amount_var
 
     def history_amount(self):
         return sum(map(lambda tp: tp[0].remain(), self.queue))
@@ -93,6 +96,7 @@ class OrderQueue:
         return algo_height
 
     def cancel_data_order(self, amount: float):
+        hist_amount = amount
         while len(self.queue) > 0:
             hist_order, algo_orders = self.queue[0]
             if amount >= hist_order.remain():
@@ -107,12 +111,14 @@ class OrderQueue:
                 hist_order.volume -= amount
                 amount = 0
                 break
+        self.total_amount_var -= hist_amount - amount
         return amount
 
     def cancel_algo_order(self, order_id: int):
         for hist, algos in self.queue:
             for idx, order in enumerate(algos):
                 if order.order_id == order_id:
+                    self.total_amount_var -= order.remain()
                     algos.pop(idx)
                     return
 
@@ -258,7 +264,7 @@ def get_tick_diff(ticks: List[TickData]):
     data_length = len(ticks)
     tick_events = []
 
-    for idx in tqdm(range(1, data_length), desc='generate tick diff'):
+    for idx in range(1, data_length):
         tick = ticks[idx]
 
         events = []  # (time, price, direction, amount)
