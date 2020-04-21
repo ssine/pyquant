@@ -3,7 +3,11 @@ from simulator import Exchange, get_tick_diff
 from constant import OrderType, Direction, Offset, Status
 from strategy import BaseStrategy
 import datetime as dt
+from inspect import isfunction
 from tqdm import tqdm
+
+def empty_func():
+    pass
 
 class Engine:
     '''
@@ -39,6 +43,16 @@ class Engine:
 
     def init_exchange(self):
         self.exchange = Exchange({s: self.tick_data[s][0] for s in self.symbols}, 5)
+
+    def place_order(self, d):
+        cbbk = empty_func
+        order_id = 0
+        if 'callback' in d and isfunction(d['callback']):
+            cbbk = d['callback']
+        def cb():
+            print(f'callback for order {order_id}')
+        order_id = self.exchange.place_order(d)
+        return order_id
 
     def set_strategy(self, st: BaseStrategy):
         self.strategy = st
@@ -80,6 +94,8 @@ class Engine:
             self.exchange.snapshot()
     
     def start(self):
+        self.strategy.on_init()
+        self.strategy.on_start()
         tick_count = 0
         for symbol in self.symbols:
             tick_count += len(self.tick_order[symbol])

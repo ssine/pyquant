@@ -3,6 +3,18 @@ import datetime as dt
 from typing import List, Dict, Callable, Any
 from constant import OrderType, Direction, Offset, Status
 
+class Account:
+    name: str
+    money: float
+    long_position: float
+    short_position: float
+
+    def __init__(self, name: str, money = 0, long_position = 0, short_position = 0):
+        self.name = name
+        self.money = money
+        self.long_position = long_position
+        self.short_position = short_position
+
 class TickData:
     symbol: str
     time: dt.datetime
@@ -101,3 +113,17 @@ class OrderData:
     @staticmethod
     def get_order(order_id: int) -> 'OrderData':
         return OrderData.order_dict[order_id]
+
+class TradeData():
+    """
+    Trade data contains information of a fill of an order. One order
+    can have several trade fills.
+    """
+    order_id: int
+    price: float
+    fill_amount: float
+
+    def __init__(self, order_id, price, fill_amount):
+        self.order_id = order_id
+        self.price = price
+        self.fill_amount = fill_amount

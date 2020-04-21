@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import collections, sortedcontainers, datetime, sys
 from tqdm import tqdm
-from item import TickData, Snapshot, OrderData
+from item import TickData, Snapshot, OrderData, Account, TradeData
 from typing import List, Dict, Tuple
 from inspect import isfunction
 from constant import OrderType, Direction, Offset, Status
@@ -13,6 +13,8 @@ TODO:
 * visualization
 '''
 
+order_fill_list = []
+
 class OrderQueue:
     '''
     in the bid/ask book, there is an order book for each price, consisted of
@@ -21,8 +23,10 @@ class OrderQueue:
     queue: List[Tuple[OrderData, List[OrderData]]]
     next_orders: List[OrderData]
     total_amount_var: float
+    price: float
 
-    def __init__(self):
+    def __init__(self, price: float):
+        self.price = price
         self.queue = []
         self.next_orders = []
         self.total_amount_var = 0
@@ -42,13 +46,17 @@ class OrderQueue:
         while len(orders) > 0:
             order = orders[0]
             if amount >= order.remain():
-                amount -= order.remain()
-                self.total_amount_var -= order.remain()
+                trade_amount = order.remain()
+                amount -= trade_amount
+                order.traded += trade_amount
+                self.total_amount_var -= trade_amount
                 if hasattr(order, 'callback') and isfunction(order.callback):
                     order.callback()
+                order_fill_list.append(TradeData(order.order_id, self.price, trade_amount))
                 orders.pop(0)
             else:
                 order.traded += amount
+                order_fill_list.append(TradeData(order.order_id, self.price, amount))
                 self.total_amount_var -= amount
                 break
 
@@ -132,10 +140,10 @@ class Future:
         self.buy_book = sortedcontainers.SortedDict()
         self.sell_book = sortedcontainers.SortedDict()
         for idx in range(tick.data_depth):
-            q = OrderQueue()
+            q = OrderQueue(tick.bid_price[idx])
             q.add_order(OrderData({'volume': tick.bid_volume[idx], 'is_history': True, 'traded': 0}))
             self.buy_book[tick.bid_price[idx]] = q
-            q = OrderQueue()
+            q = OrderQueue(tick.ask_price[idx])
             q.add_order(OrderData({'volume': tick.ask_volume[idx], 'is_history': True, 'traded': 0}))
             self.sell_book[tick.ask_price[idx]] = q
 
@@ -212,12 +220,24 @@ class Future:
 
 
 class Exchange:
+    accounts: Dict[str, Account]
+    order_account: Dict[int, str]
     futures: Dict[str, Future]
 
     def __init__(self, snapshot: Snapshot, max_depth: int):
         self.futures = {}
         for k in snapshot.keys():
             self.futures[k] = Future(k, snapshot[k], max_depth)
+        self.accounts = {}
+
+    def add_account(self, name: str, money: float = 0):
+        self.accounts[name] = Account(name, money)
+
+    def get_accounts(self):
+        return self.accounts
+    
+    def get_account(self, name):
+        return self.accounts[name]
 
     def add_signal(self, symbol, order_type, price, volume):
         if symbol in self.futures:
@@ -225,7 +245,7 @@ class Exchange:
         else:
             print(f'future {symbol} not exist!')
 
-    def place_order(self, d) -> OrderData:
+    def place_order(self, d, account_name = None) -> OrderData:
         if 'is_history' not in d:
             d['is_history'] = False
         order = OrderData(d)
@@ -238,7 +258,15 @@ class Exchange:
             self.futures[symbol].place_order(order)
         else:
             print(f'future {symbol} not exist!')
+            return
 
+        if account_name is not None:
+            if account_name not in self.accounts:
+                print(f'account {account_name} not exist!')
+            else:
+                self.order_account[order.order_id] = self.accounts[account_name]
+
+        self._process_trade_data()
         return order
 
     def snapshot(self) -> Snapshot:
@@ -247,6 +275,25 @@ class Exchange:
             ss[symbol] = self.futures[symbol].snapshot()
         return ss
 
+    def _process_trade_data(self):
+        for fill in order_fill_list:
+            order_id = fill.order_id
+            if order_id in self.order_account:
+                account = self.accounts[self.order_account[order_id]]
+                order = OrderData.get_order(order_id)
+                if order.direction == Direction.LONG and order.offset == Offset.OPEN:
+                    account.money -= fill.fill_amount * fill.price
+                    account.long_position += fill.fill_amount
+                elif order.direction == Direction.LONG and order.offset == Offset.CLOSE:
+                    account.money += fill.fill_amount * fill.price
+                    account.long_position -= fill.fill_amount
+                elif order.direction == Direction.SHORT and order.offset == Offset.OPEN:
+                    account.money += fill.fill_amount * fill.price
+                    account.short_position += fill.fill_amount
+                elif order.direction == Direction.SHORT and order.offset == Offset.CLOSE:
+                    account.money -= fill.fill_amount * fill.price
+                    account.short_position -= fill.fill_amount
+        order_fill_list = []
 
 def get_dict_from_tick(tick: TickData, type: str):
     d = {}
