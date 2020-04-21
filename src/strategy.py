@@ -1,8 +1,16 @@
 from item import TickData
+from engine import Engine
+from constant import OrderType, Direction, Offset, Status
 
 class BaseStrategy:
+    eng: Engine
+
     def __init__(self):
-        pass
+        self.eng = None
+
+    def set_engine(self, eng):
+        self.eng = eng
+
     def on_init(self):
         pass
     def on_start(self):
@@ -15,20 +23,51 @@ class BaseStrategy:
         pass
     def on_order(self):
         pass
-    def buy(self):
-        # buy something
-        pass
+
+    def buy(self, symbol: str, price: float, volume: float):
+        self.eng.place_order({
+            'symbol': symbol,
+            'price': price
+            'volume': volume,
+            'is_history': False,
+            'order_type': OrderType.LIMIT,
+            'direction': Direction.LONG,
+            'offset': Offset.OPEN,
+        })
+
     def sell(self):
-        # sell something
-        pass
+        self.eng.place_order({
+            'symbol': symbol,
+            'price': price
+            'volume': volume,
+            'is_history': False,
+            'order_type': OrderType.LIMIT,
+            'direction': Direction.LONG,
+            'offset': Offset.CLOSE,
+        })
+
     def short(self):
-        # short something
-        pass
+        self.eng.place_order({
+            'symbol': symbol,
+            'price': price
+            'volume': volume,
+            'is_history': False,
+            'order_type': OrderType.LIMIT,
+            'direction': Direction.SHORT,
+            'offset': Offset.OPEN,
+        })
+
     def cover(self):
-        # cover something
-        pass
-    def send_order(self):
-        pass
+        self.eng.place_order({
+            'symbol': symbol,
+            'price': price
+            'volume': volume,
+            'is_history': False,
+            'order_type': OrderType.LIMIT,
+            'direction': Direction.LONG,
+            'offset': Offset.CLOSE,
+        })
+
     def cancel_order(self):
         pass
     def cancel_all(self):
