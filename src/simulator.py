@@ -43,6 +43,7 @@ class OrderQueue:
         self.total_amount_var += order.remain()
 
     def _consume_algo_order_list(self, orders: List[OrderData], amount: float):
+        global order_fill_list
         while len(orders) > 0:
             order = orders[0]
             if amount >= order.remain():
@@ -163,7 +164,7 @@ class Future:
                         break
                 if order.volume > 0:
                     if order.price not in self.buy_book:
-                        self.buy_book[order.price] = OrderQueue()
+                        self.buy_book[order.price] = OrderQueue(order.price)
                     self.buy_book[order.price].add_order(order)
             elif order.direction == Direction.SHORT and order.offset == Offset.OPEN or order.direction == Direction.LONG and order.offset == Offset.CLOSE:
                 buy_prices = list(reversed(self.buy_book.keys()))
@@ -177,7 +178,7 @@ class Future:
                         break
                 if order.volume > 0:
                     if order.price not in self.sell_book:
-                        self.sell_book[order.price] = OrderQueue()
+                        self.sell_book[order.price] = OrderQueue(order.price)
                     self.sell_book[order.price].add_order(order)
         elif order.order_type == OrderType.MARKET:
             pass
@@ -206,6 +207,7 @@ class Future:
                 del self.buy_book[order.price]
 
     def snapshot(self) -> TickData:
+        # TODO: add last_price info
         sps = list(self.sell_book.keys())[:5]
         bps = list(reversed(self.buy_book.keys()))[:5]
         depth = min(len(sps), len(bps), self.max_depth)
@@ -276,6 +278,7 @@ class Exchange:
         return ss
 
     def _process_trade_data(self):
+        global order_fill_list
         for fill in order_fill_list:
             order_id = fill.order_id
             if order_id in self.order_account:
