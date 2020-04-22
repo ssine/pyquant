@@ -2,6 +2,9 @@ import numpy as np
 import datetime as dt
 from typing import List, Dict, Callable, Any
 from constant import OrderType, Direction, Offset, Status
+import logging
+
+logger = logging.getLogger('item')
 
 class Account:
     name: str
@@ -53,16 +56,21 @@ class TickData:
         # if isinstance(other, TickData):
         ds = self.__dict__
         do = other.__dict__
+        # logger.debug('comparing:')
+        # logger.debug(ds)
+        # logger.debug(do)
         if self.data_depth == 0 or other.data_depth == 0:
             return True
         for k in ds.keys() & do.keys():
             if ds[k] != do[k]:
-                print(f'dont eq on key {k}: {ds[k]} | {do[k]}')
+                print(f'don\'t eq on key {k}: {ds[k]} | {do[k]}')
+                # logger.debug(f'don\'t eq on key {k}: {ds[k]} | {do[k]}')
                 return False
         return True
         # return False
 
     def __eq__(self, other):
+        return self.loose_eq(other)
         if type(other) == type(self):
             return np.all([
                 self.symbol == other.symbol,
