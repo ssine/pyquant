@@ -70,3 +70,7 @@ class BaseStrategy:
         pass
     def cancel_all(self):
         pass
+
+class SampleStrategy(BaseStrategy):
+    def on_tick(self, tk):
+        self.buy('i2009', 100, 10)

@@ -20,6 +20,6 @@ eng.set_strategy(st)
 
 #%%
 tk = eng.step()
-
+eng.verify_tick(tk)
 
 # %%
