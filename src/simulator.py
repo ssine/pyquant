@@ -110,11 +110,11 @@ class OrderQueue:
             hist_order, algo_orders = self.queue[0]
             if amount >= hist_order.remain():
                 amount -= hist_order.remain()
-                if len(hist_order) > 0:
+                if len(algo_orders) > 0:
                     if len(self.queue) > 0:
-                        self.queue[1][1] = hist_order + self.queue[1][1]
+                        self.queue[1][1] = algo_orders + self.queue[1][1]
                     else:
-                        self.next_orders = hist_order + self.next_orders
+                        self.next_orders = algo_orders + self.next_orders
                 self.queue.pop(0)
             else:
                 hist_order.volume -= amount
@@ -134,6 +134,7 @@ class OrderQueue:
 class Future:
     buy_book: Dict[float, OrderQueue]
     sell_book: Dict[float, OrderQueue]
+    symbol: str
 
     def __init__(self, symbol: str, tick: TickData, max_depth: int):
         self.symbol = symbol
@@ -158,7 +159,7 @@ class Future:
                     if sp > order.price:
                         break
                     order.volume = self.sell_book[sp].match_order(order.volume)
-                    if order.volume > 0:
+                    if self.sell_book[sp].history_amount() <= 0:
                         del self.sell_book[sp]
                     else:
                         break
@@ -172,7 +173,7 @@ class Future:
                     if bp < order.price:
                         break
                     order.volume = self.buy_book[bp].match_order(order.volume)
-                    if order.volume > 0:
+                    if self.buy_book[bp].history_amount() <= 0:
                         del self.buy_book[bp]
                     else:
                         break
@@ -207,11 +208,10 @@ class Future:
                 del self.buy_book[order.price]
 
     def snapshot(self) -> TickData:
-        # TODO: add last_price info
         sps = list(self.sell_book.keys())[:5]
         bps = list(reversed(self.buy_book.keys()))[:5]
         depth = min(len(sps), len(bps), self.max_depth)
-        tick = TickData()
+        tick = TickData({'symbol': self.symbol})
         tick.set_data_depth(depth)
         for i in range(depth):
             tick.bid_price[i] = bps[i]
@@ -270,6 +270,9 @@ class Exchange:
 
         self._process_trade_data()
         return order
+
+    def cancel_data_order(self, future: str, price: float, volume: float):
+        self.futures[future].cancel_data_order(price, volume)
 
     def snapshot(self) -> Snapshot:
         ss = {}
