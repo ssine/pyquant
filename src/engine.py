@@ -5,6 +5,9 @@ from strategy import BaseStrategy
 import datetime as dt
 from inspect import isfunction
 from tqdm import tqdm
+import logging
+
+logger = logging.getLogger('engine')
 
 def empty_func():
     pass
@@ -67,6 +70,7 @@ class Engine:
             evts = self.tick_order[symbol][self.tick_idx[symbol]]
             if len(evts) == 0:
                 earlist_symbol = symbol
+                next_evts = evts
                 break
             if evts[0][0] <= earlist_time:
                 earlist_time = evts[0][0]
@@ -74,46 +78,15 @@ class Engine:
                 next_evts = evts
         if earlist_symbol == '':
             print('backtesting finished')
-            return
+            return None
         self.tick_idx[earlist_symbol] += 1
+        # logger.debug('-----------')
+        # logger.debug(f'stepping {earlist_symbol}')
+        # logger.debug('tick before:')
+        # logger.debug(self.tick_data[earlist_symbol][self.tick_idx[earlist_symbol]-1].__dict__)
         for evt in next_evts:
-            self.exchange.place_order({
-                'symbol': earlist_symbol,
-                'price': evt[2],
-                'volume': evt[3],
-                'direction': Direction.LONG if evt[1] == 'buy' else Direction.SHORT,
-                'is_history': True,
-                'order_type': OrderType.LIMIT,
-                'offset': Offset.OPEN,
-            })
-        tk = self.exchange.snapshot()
-        return tk
-
-    def test(self):
-        idx = 0
-        while True:
-            earlist_time = dt.datetime.now()
-            earlist_symbol = ''
-            next_evts = []
-            for symbol in self.symbols:
-                if len(self.tick_order[symbol]) <= self.tick_idx[symbol]:
-                    continue
-                evts = self.tick_order[symbol][self.tick_idx[symbol]]
-                if len(evts) == 0:
-                    earlist_symbol = symbol
-                    break
-                if evts[0][0] <= earlist_time:
-                    earlist_time = evts[0][0]
-                    earlist_symbol = symbol
-                    next_evts = evts
-            if earlist_symbol == '':
-                print('backtesting finished')
-                return
-            if idx % 1000 == 0:
-                print(idx)
-            idx += 1
-            self.tick_idx[earlist_symbol] += 1
-            for evt in next_evts:
+            # logger.debug(evt)
+            if evt[1] == 'buy' or evt[1] == 'sell':
                 self.exchange.place_order({
                     'symbol': earlist_symbol,
                     'price': evt[2],
@@ -123,8 +96,48 @@ class Engine:
                     'order_type': OrderType.LIMIT,
                     'offset': Offset.OPEN,
                 })
-            self.exchange.snapshot()
-    
+            elif evt[1] == 'cancel':
+                self.exchange.cancel_data_order(earlist_symbol, evt[2], evt[3])
+            else:
+                print(f'unknown action type: {evt[1]}')
+                return None
+        tk = self.exchange.snapshot()
+        tk = self.amend_tick_data(tk)
+        # logger.debug('tick after:')
+        # logger.debug(self.tick_data[earlist_symbol][self.tick_idx[earlist_symbol]].__dict__)
+        return tk
+
+    def amend_tick_data(self, tick):
+        # fill in last trade info in a tick
+        for sym in self.symbols:
+            if self.tick_idx[sym] > 0:
+                original = self.tick_data[sym][self.tick_idx[sym]]
+                setattr(tick[sym], 'last_price', original.last_price)
+                setattr(tick[sym], 'last_volume', original.last_volume)
+        return tick
+
+    def verify_tick(self, tick):
+        for sym in self.symbols:
+            if self.tick_idx[sym] > 0:
+                original = self.tick_data[sym][self.tick_idx[sym]]
+                if original != tick[sym]:
+                    return False
+        return True
+
+    def test(self):
+        tick_count = 0
+        for symbol in self.symbols:
+            tick_count += len(self.tick_order[symbol])
+        for idx in tqdm(range(tick_count), desc='correctness verification'):
+        # for idx in range(tick_count):
+            # print(idx)
+            tk = self.step()
+            if tk is None:
+                return
+            if not self.verify_tick(tk):
+                print('verification error!')
+                return
+
     def start(self):
         self.strategy.on_init()
         self.strategy.on_start()
