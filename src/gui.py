@@ -1,6 +1,7 @@
 import sys, os, math
 import tkinter as tk
 from simulator import Exchange
+from engine import Engine
 from data_loader import get_tradeblazer_df, df_to_tick_data, get_aligned_day_data
 from constant import OrderType, Direction, Offset, Status
 from item import TickData
@@ -10,6 +11,7 @@ class GUI:
     cv: tk.Canvas
     current_future: str
     ex: Exchange
+    eng: Engine
 
     SCALE = 50
     WIDTH = 16 * SCALE # x
@@ -25,18 +27,20 @@ class GUI:
     ASK_ALGO_COLOR = '#ff4a86'
     TRADED_COLOR = '#c3c3c3'
 
-    def __init__(self, ex: Exchange):
-        self.ex = ex
+    def __init__(self, eng: Engine):
+        self.eng = eng
+        self.ex = eng.exchange
         self.root = tk.Tk()
         self.root.title('pyquant')
 
         self.cv = tk.Canvas(self.root, width=GUI.WIDTH, height=GUI.HEIGHT)
         self.cv.pack()
         self.cv.bind("<Button-1>", self.oncanvasclick)
-        self.current_future = list(ex.futures.keys())[0]
+        self.current_future = list(self.ex.futures.keys())[0]
 
         self.draw_exchange()
-        self.draw_order_maker()
+        self.draw_enging_step()
+        # self.draw_order_maker()
 
         self.test_orders = []
         self.test_order_idx = 0
@@ -157,12 +161,35 @@ class GUI:
         button = tk.Button(order_frame, text='next order', command=self.put_next_test_order)
         button.grid(row=2, column=1)
 
+    def step_engine(self):
+        tk = self.eng.step()
+        # print('verification:')
+        self.eng.verify_tick(tk)
+        self.draw_exchange()
+
+    def draw_enging_step(self):
+        engine_frame = tk.Frame(self.root)
+        engine_frame.pack(side=tk.TOP)
+
+        button = tk.Button(engine_frame, text='step engine', command=self.step_engine)
+        button.grid(row=0)
+
     def put_next_test_order(self):
         self.ex.place_order(self.test_orders[self.test_order_idx])
         self.test_order_idx += 1
         self.draw_exchange()
 
 if __name__ == '__main__':
+    eng = Engine()
+    eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2005_Tick.csv'), 'i2005')
+    eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2009_Tick.csv'), 'i2009')
+
+    eng.init_exchange()
+
+    gui = GUI(eng)
+    gui.start()
+
+def old_main():
     ta = TickData({
         'symbol': 'a',
         'data_depth': 3,
