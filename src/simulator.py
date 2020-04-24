@@ -231,6 +231,7 @@ class Exchange:
         for k in snapshot.keys():
             self.futures[k] = Future(k, snapshot[k], max_depth)
         self.accounts = {}
+        self.order_account = {}
 
     def add_account(self, name: str, money: float = 0):
         self.accounts[name] = Account(name, money)
