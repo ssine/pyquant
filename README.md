@@ -25,3 +25,5 @@ strategy 定义了策略的接口。
 ### UI
 
 `gui.py` 包含了对交易所内部结构的可视化，可以显示所有期货的交易委托账本，并区分历史订单与回测策略的订单。
+
+![sample](https://media.githubusercontent.com/media/ssine/pyquant/master/image/gui.png)
