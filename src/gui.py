@@ -5,6 +5,7 @@ from engine import Engine
 from data_loader import get_tradeblazer_df, df_to_tick_data, get_aligned_day_data
 from constant import OrderType, Direction, Offset, Status
 from item import TickData
+from grid_trading import GridTrading
 
 class GUI:
     root: tk.Tk
@@ -162,32 +163,30 @@ class GUI:
         button.grid(row=2, column=1)
 
     def step_engine(self):
-        tk = self.eng.step()
+        self.eng.step()
         # print('verification:')
-        self.eng.verify_tick(tk)
+        # self.eng.verify_tick(tk)
         self.draw_exchange()
+
+    def step_engine_x100(self):
+        for i in range(100):
+            self.step_engine()
 
     def draw_enging_step(self):
         engine_frame = tk.Frame(self.root)
         engine_frame.pack(side=tk.TOP)
 
+        button2 = tk.Button(engine_frame, text='next order', command=self.put_next_test_order)
+        button2.grid(row=0, column=0)
         button = tk.Button(engine_frame, text='step engine', command=self.step_engine)
-        button.grid(row=0)
+        button.grid(row=0, column=1)
+        button = tk.Button(engine_frame, text='step engine x100', command=self.step_engine_x100)
+        button.grid(row=0, column=2)
 
     def put_next_test_order(self):
         self.ex.place_order(self.test_orders[self.test_order_idx])
         self.test_order_idx += 1
         self.draw_exchange()
-
-if __name__ == '__main__':
-    eng = Engine()
-    eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2005_Tick.csv'), 'i2005')
-    eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2009_Tick.csv'), 'i2009')
-
-    eng.init_exchange()
-
-    gui = GUI(eng)
-    gui.start()
 
 def old_main():
     ta = TickData({
@@ -214,13 +213,15 @@ def old_main():
         'bid_volume': [60, 40, 54],
         'ask_volume': [46, 69, 36],
     })
-    ex = Exchange({
+
+    eng = Engine()
+    eng.exchange = Exchange({
         'a': ta,
         'b': tb,
         'c': tc,
     }, 3)
 
-    gui = GUI(ex)
+    gui = GUI(eng)
     gui.set_test_orders([
         {'price': 10.3, 'volume': 30, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
         {'price': 10.3, 'volume': 20, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
@@ -257,3 +258,19 @@ def old_main():
         {'price': 10.5, 'volume': 5, 'direction': Direction.LONG, 'is_history': False, 'order_type': OrderType.LIMIT, 'offset': Offset.OPEN, 'symbol': 'a'},
     ])
     gui.start()
+
+if __name__ == '__main__':
+    eng = Engine()
+    # eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2005_Tick.csv'), 'i2005')
+    # eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2009_Tick.csv'), 'i2009')
+    eng.load_data('test', os.path.join(os.path.dirname(__file__), '../data/grid_test.csv'), 'test')
+
+    eng.init_exchange()
+    eng.exchange.add_account('test', 1000000)
+
+    st = GridTrading('test', 16, 21, 0.3, 0.3, 50, 200)
+    eng.set_strategy(st)
+
+    gui = GUI(eng)
+    gui.start()
+    # old_main()
