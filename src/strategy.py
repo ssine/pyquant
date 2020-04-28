@@ -22,7 +22,10 @@ class BaseStrategy:
     def on_order(self):
         pass
 
-    def buy(self, symbol: str, price: float, volume: float):
+    def get_account(self):
+        return self.eng.exchange.accounts['test']
+
+    def buy(self, symbol: str, price: float, volume: float, callback = None):
         self.eng.place_order({
             'symbol': symbol,
             'price': price,
@@ -31,9 +34,10 @@ class BaseStrategy:
             'order_type': OrderType.LIMIT,
             'direction': Direction.LONG,
             'offset': Offset.OPEN,
-        })
+            'callback': callback,
+        }, 'test')
 
-    def sell(self):
+    def sell(self, symbol: str, price: float, volume: float, callback = None):
         self.eng.place_order({
             'symbol': symbol,
             'price': price,
@@ -42,9 +46,10 @@ class BaseStrategy:
             'order_type': OrderType.LIMIT,
             'direction': Direction.LONG,
             'offset': Offset.CLOSE,
-        })
+            'callback': callback,
+        }, 'test')
 
-    def short(self):
+    def short(self, symbol: str, price: float, volume: float, callback = None):
         self.eng.place_order({
             'symbol': symbol,
             'price': price,
@@ -53,9 +58,10 @@ class BaseStrategy:
             'order_type': OrderType.LIMIT,
             'direction': Direction.SHORT,
             'offset': Offset.OPEN,
-        })
+            'callback': callback,
+        }, 'test')
 
-    def cover(self):
+    def cover(self, symbol: str, price: float, volume: float, callback = None):
         self.eng.place_order({
             'symbol': symbol,
             'price': price,
@@ -64,12 +70,14 @@ class BaseStrategy:
             'order_type': OrderType.LIMIT,
             'direction': Direction.LONG,
             'offset': Offset.CLOSE,
-        })
+            'callback': callback,
+        }, 'test')
 
     def cancel_order(self):
         pass
     def cancel_all(self):
         pass
+
 
 class SampleStrategy(BaseStrategy):
     def on_tick(self, tk):
