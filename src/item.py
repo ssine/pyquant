@@ -8,13 +8,13 @@ logger = logging.getLogger('item')
 
 class Account:
     name: str
-    money: float
+    balance: float
     long_position: float
     short_position: float
 
-    def __init__(self, name: str, money = 0, long_position = 0, short_position = 0):
+    def __init__(self, name: str, balance = 0, long_position = 0, short_position = 0):
         self.name = name
-        self.money = money
+        self.balance = balance
         self.long_position = long_position
         self.short_position = short_position
 
@@ -107,7 +107,7 @@ class OrderData:
     callback: Callable[['OrderData'], None]
 
     def __init__(self, d: Dict[str, Any]):
-        keys = ['symbol', 'is_history', 'order_type', 'direction', 'offset', 'price', 'volume', 'traded', 'status', 'submit_time']
+        keys = ['symbol', 'is_history', 'order_type', 'direction', 'offset', 'price', 'volume', 'traded', 'status', 'submit_time', 'callback']
         for k in keys:
             if k in d:
                 setattr(self, k, d[k])
