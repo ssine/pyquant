@@ -26,9 +26,11 @@ def get_tradeblazer_df(filename):
     def get_row_datetime(row):
         date = str(row['date'])
         time = str(int(row['time'] * 10 ** 9))
+        def int_crop_60(s):
+            return min(max(int(s), 0), 59)
         return datetime.datetime(
             int(date[:4]), int(date[4:6]), int(date[6:]),
-            int(time[:-7]), int(time[-7:-5]), int(time[-5:-3]), int(time[-3:]) * 1000)
+            int(time[:-7]), int_crop_60(time[-7:-5]), int_crop_60(time[-5:-3]), int(time[-3:]) * 1000)
 
     df['time'] = df.apply(get_row_datetime, axis=1)
     df.drop(['date', 'open_interest_inc', 'unk1'], axis=1, inplace=True)
@@ -83,6 +85,11 @@ def get_l2_df(filename):
     df.set_index('time', inplace=True)
     return df
 
+def get_test_df(filename):
+    df = pd.read_csv(filename, index_col=0)
+    df.index.name = 'time'
+    df.index = pd.to_datetime(df.index)
+    return df
 
 def get_aligned_data(df, start_time, end_time, interval_ms, columns):
     '''
