@@ -5,21 +5,17 @@
 #%%
 import sys, os
 from engine import Engine
+from data_loader import get_tradeblazer_df, get_l2_df, df_to_tick_data
 from strategy import BaseStrategy
+import matplotlib.pyplot as plt
 
 #%%
-eng = Engine()
-eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2005_Tick.csv'), 'i2005')
-eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/i2009_Tick.csv'), 'i2009')
+df = get_tradeblazer_df(os.path.join(os.path.dirname(__file__), '../data/IF888_Tick.csv'))
 
-eng.init_exchange()
+# %%
+df['lastPrice']
 
-#%%
-st = BaseStrategy()
-eng.set_strategy(st)
-
-#%%
-tk = eng.step()
-eng.verify_tick(tk)
+# %%
+plt.plot(range(len(df['lastPrice'])), df['lastPrice'])
 
 # %%
