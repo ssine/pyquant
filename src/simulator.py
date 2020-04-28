@@ -111,7 +111,8 @@ class OrderQueue:
             if amount >= hist_order.remain():
                 amount -= hist_order.remain()
                 if len(algo_orders) > 0:
-                    if len(self.queue) > 0:
+                    if len(self.queue) > 1:
+                        print(self.queue[1])
                         self.queue[1][1] = algo_orders + self.queue[1][1]
                     else:
                         self.next_orders = algo_orders + self.next_orders
@@ -150,13 +151,20 @@ class Future:
             self.sell_book[tick.ask_price[idx]] = q
 
     def place_order(self, order: OrderData):
+        global order_fill_list
         if order.volume == 0:
+            order.callback() if hasattr(order, 'callback') else None
             return
         if order.order_type == OrderType.LIMIT:
             if order.direction == Direction.LONG and order.offset == Offset.OPEN or order.direction == Direction.SHORT and order.offset == Offset.CLOSE:
                 sell_prices = list(self.sell_book.keys())
                 for sp in sell_prices:
                     if sp > order.price:
+                        break
+                    if not order.is_history:
+                        order.callback() if hasattr(order, 'callback') else None
+                        order_fill_list.append(TradeData(order.order_id, sp, order.volume))
+                        order.volume = 0
                         break
                     order.volume = self.sell_book[sp].match_order(order.volume)
                     if self.sell_book[sp].history_amount() <= 0:
@@ -171,6 +179,11 @@ class Future:
                 buy_prices = list(reversed(self.buy_book.keys()))
                 for bp in buy_prices:
                     if bp < order.price:
+                        break
+                    if not order.is_history:
+                        order.callback() if hasattr(order, 'callback') else None
+                        order_fill_list.append(TradeData(order.order_id, bp, order.volume))
+                        order.volume = 0
                         break
                     order.volume = self.buy_book[bp].match_order(order.volume)
                     if self.buy_book[bp].history_amount() <= 0:
@@ -233,8 +246,8 @@ class Exchange:
         self.accounts = {}
         self.order_account = {}
 
-    def add_account(self, name: str, money: float = 0):
-        self.accounts[name] = Account(name, money)
+    def add_account(self, name: str, balance: float = 0):
+        self.accounts[name] = Account(name, balance)
 
     def get_accounts(self):
         return self.accounts
@@ -267,7 +280,7 @@ class Exchange:
             if account_name not in self.accounts:
                 print(f'account {account_name} not exist!')
             else:
-                self.order_account[order.order_id] = self.accounts[account_name]
+                self.order_account[order.order_id] = account_name
 
         self._process_trade_data()
         return order
@@ -289,16 +302,20 @@ class Exchange:
                 account = self.accounts[self.order_account[order_id]]
                 order = OrderData.get_order(order_id)
                 if order.direction == Direction.LONG and order.offset == Offset.OPEN:
-                    account.money -= fill.fill_amount * fill.price
+                    # print(f'long open, balance - {fill.fill_amount * fill.price}')
+                    account.balance -= fill.fill_amount * fill.price
                     account.long_position += fill.fill_amount
                 elif order.direction == Direction.LONG and order.offset == Offset.CLOSE:
-                    account.money += fill.fill_amount * fill.price
+                    # print(f'long close, balance + {fill.fill_amount * fill.price}')
+                    account.balance += fill.fill_amount * fill.price
                     account.long_position -= fill.fill_amount
                 elif order.direction == Direction.SHORT and order.offset == Offset.OPEN:
-                    account.money += fill.fill_amount * fill.price
+                    # print(f'short open, balance + {fill.fill_amount * fill.price}')
+                    account.balance += fill.fill_amount * fill.price
                     account.short_position += fill.fill_amount
                 elif order.direction == Direction.SHORT and order.offset == Offset.CLOSE:
-                    account.money -= fill.fill_amount * fill.price
+                    # print(f'short close, balance - {fill.fill_amount * fill.price}')
+                    account.balance -= fill.fill_amount * fill.price
                     account.short_position -= fill.fill_amount
         order_fill_list = []
 
