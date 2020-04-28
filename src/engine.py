@@ -1,4 +1,4 @@
-from data_loader import get_tradeblazer_df, get_l2_df, df_to_tick_data
+from data_loader import get_tradeblazer_df, get_l2_df, get_test_df, df_to_tick_data
 from simulator import Exchange, get_tick_diff
 from constant import OrderType, Direction, Offset, Status
 from strategy import BaseStrategy
@@ -6,6 +6,7 @@ import datetime as dt
 from inspect import isfunction
 from tqdm import tqdm
 import logging
+import pandas as pd
 
 logger = logging.getLogger('engine')
 
@@ -22,6 +23,7 @@ class Engine:
         self.tick_order = {}
         self.tick_idx = {}
         self.symbols = []
+        self.tracking_accounts = {} # balance, long pos, short pos
         self.exchange = None
         self.strategy = None
 
@@ -31,8 +33,10 @@ class Engine:
             df = get_tradeblazer_df(filename)
         elif tp == 'l2':
             df = get_l2_df(filename)
+        elif tp == 'test':
+            df = get_test_df(filename)
         else:
-            print('data type not supported.')
+            print(f'data type {tp} not supported.')
             return
         if 'start_date' in opts:
             df = df[df.index > opts['start_date']]
@@ -47,19 +51,20 @@ class Engine:
     def init_exchange(self):
         self.exchange = Exchange({s: self.tick_data[s][0] for s in self.symbols}, 5)
 
-    def place_order(self, d):
-        cbbk = empty_func
-        order_id = 0
-        if 'callback' in d and isfunction(d['callback']):
-            cbbk = d['callback']
-        def cb():
-            print(f'callback for order {order_id}')
-        order_id = self.exchange.place_order(d)
+    def place_order(self, d, account_name = None):
+        order_id = self.exchange.place_order(d, account_name)
         return order_id
 
     def set_strategy(self, st: BaseStrategy):
         self.strategy = st
         self.strategy.set_engine(self)
+
+    def track_account(self, name):
+        self.tracking_accounts[name] = []
+
+    def account_trace_to_csv(self, account_name, filename):
+        df = pd.DataFrame(self.tracking_accounts[account_name], columns=['balance', 'long_position', 'short_position'])
+        df.to_csv(filename)
 
     def step(self):
         earlist_time = dt.datetime.now()
@@ -104,6 +109,10 @@ class Engine:
                 return None
         tk = self.exchange.snapshot()
         tk = self.amend_tick_data(tk)
+        for accn in self.tracking_accounts.keys():
+            acc = self.exchange.accounts[accn]
+            self.tracking_accounts[accn].append([acc.balance, acc.long_position, acc.short_position])
+        self.strategy.on_tick(tk)
         # logger.debug('tick after:')
         # logger.debug(self.tick_data[earlist_symbol][self.tick_idx[earlist_symbol]].__dict__)
         return tk
