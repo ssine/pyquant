@@ -7,6 +7,7 @@ from inspect import isfunction
 from tqdm import tqdm
 import logging
 import pandas as pd
+from typing import List
 
 logger = logging.getLogger('engine')
 
@@ -24,6 +25,7 @@ class Engine:
         self.tick_idx = {}
         self.symbols = []
         self.tracking_accounts = {} # balance, long pos, short pos
+        self.tracking_account_symbols = {} # balance, long pos, short pos
         self.exchange = None
         self.strategy = None
 
@@ -60,11 +62,16 @@ class Engine:
         self.strategy = st
         self.strategy.set_engine(self)
 
-    def track_account(self, name):
+    def track_account(self, name, symbols: List[str]):
         self.tracking_accounts[name] = []
+        self.tracking_account_symbols[name] = symbols
 
     def account_trace_to_csv(self, account_name, filename):
-        df = pd.DataFrame(self.tracking_accounts[account_name], columns=['balance', 'long_position', 'short_position'])
+        cols = ['balance']
+        for syn in self.tracking_account_symbols[account_name]:
+            cols.append(f'{syn}_long')
+            cols.append(f'{syn}_short')
+        df = pd.DataFrame(self.tracking_accounts[account_name], columns=cols)
         df.to_csv(filename)
 
     def step(self):
@@ -112,7 +119,11 @@ class Engine:
         tk = self.amend_tick_data(tk)
         for accn in self.tracking_accounts.keys():
             acc = self.exchange.accounts[accn]
-            self.tracking_accounts[accn].append([acc.balance, acc.long_position, acc.short_position])
+            lst = [acc.balance]
+            for sym in self.tracking_account_symbols[accn]:
+                lst.append(acc.position[sym]['long'])
+                lst.append(acc.position[sym]['short'])
+            self.tracking_accounts[accn].append(lst)
         self.strategy.on_tick(tk)
         # logger.debug('tick after:')
         # logger.debug(self.tick_data[earlist_symbol][self.tick_idx[earlist_symbol]].__dict__)
@@ -159,6 +170,30 @@ class Engine:
             tk = self.step()
             if tk is None:
                 return
-            self.strategy.on_tick(tk)
+            if tick_count - idx < 3:
+                if tick_count - idx == 2:
+                    # cover account forcebly
+                    acc = self.exchange.accounts['test']
+                    for sym in acc.position.keys():
+                        self.exchange.place_order({
+                            'symbol': sym,
+                            'volume': acc.position[sym]['long'],
+                            'is_history': False,
+                            'order_type': OrderType.MARKET,
+                            'direction': Direction.LONG,
+                            'offset': Offset.CLOSE,
+                        }, 'test')
+                        self.exchange.place_order({
+                            'symbol': sym,
+                            'volume': acc.position[sym]['short'],
+                            'is_history': False,
+                            'order_type': OrderType.MARKET,
+                            'direction': Direction.SHORT,
+                            'offset': Offset.CLOSE,
+                        }, 'test')
+            else:
+                self.strategy.on_tick(tk)
             if self.exchange.accounts['test'].balance < 200:
+                print('no enough balance, break')
                 break
+            
