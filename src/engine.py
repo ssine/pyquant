@@ -67,7 +67,7 @@ class Engine:
         self.tracking_account_symbols[name] = symbols
 
     def account_trace_to_csv(self, account_name, filename):
-        cols = ['balance']
+        cols = ['balance', 'asset']
         for syn in self.tracking_account_symbols[account_name]:
             cols.append(f'{syn}_long')
             cols.append(f'{syn}_short')
@@ -119,8 +119,9 @@ class Engine:
         tk = self.amend_tick_data(tk)
         for accn in self.tracking_accounts.keys():
             acc = self.exchange.accounts[accn]
-            lst = [acc.balance]
+            lst = [acc.balance, acc.balance]
             for sym in self.tracking_account_symbols[accn]:
+                lst[1] += (acc.position[sym]['long'] - acc.position[sym]['short']) * tk[sym].last_price
                 lst.append(acc.position[sym]['long'])
                 lst.append(acc.position[sym]['short'])
             self.tracking_accounts[accn].append(lst)
