@@ -47,6 +47,7 @@ class Engine:
         self.tick_order[symbol] = get_tick_diff(tick)
         self.tick_idx[symbol] = 0
         self.symbols.append(symbol)
+        return df
 
     def init_exchange(self):
         self.exchange = Exchange({s: self.tick_data[s][0] for s in self.symbols}, 5)
@@ -159,3 +160,5 @@ class Engine:
             if tk is None:
                 return
             self.strategy.on_tick(tk)
+            if self.exchange.accounts['test'].balance < 200:
+                break

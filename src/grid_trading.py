@@ -26,6 +26,8 @@ class GridTrading(BaseStrategy):
         if tk.last_price < self.low_price or self.high_price < tk.last_price:
             return
         idx = int((tk.last_price - self.low_price) / self.step_price)
+        if idx < 0 or idx >= len(self.grids):
+            return
         cell = self.grids[idx]
         if cell['state'] != 'idle':
             return
@@ -33,15 +35,13 @@ class GridTrading(BaseStrategy):
         if acc.balance < self.min_balance:
             print('no enough balance, stop putting order.')
             return
-        # print(f'price fall in cell {cell["price"]}, buying')
-        def order_finish_callback():
-            nonlocal cell
-            def on_cover_order_finish():
-                nonlocal cell
-                cell['state'] = 'idle'
-            # print(f'buy order at price {cell["price"]} finished, putting cover order at {cell["cover_price"]}')
+
+        def on_cover_order_finish():
+            cell['state'] = 'idle'
+
+        def on_buy_order_finish():
             cell['state'] = 'cover'
             self.cover(self.symbol, cell['cover_price'], self.amount, on_cover_order_finish)
+
         cell['state'] = 'pending'
-        self.buy(self.symbol, cell['price'], self.amount, order_finish_callback)
-        # print(f'account balance: {acc.balance}')
+        self.buy(self.symbol, cell['price'], self.amount, on_buy_order_finish)

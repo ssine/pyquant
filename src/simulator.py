@@ -112,7 +112,6 @@ class OrderQueue:
                 amount -= hist_order.remain()
                 if len(algo_orders) > 0:
                     if len(self.queue) > 1:
-                        print(self.queue[1])
                         self.queue[1][1] = algo_orders + self.queue[1][1]
                     else:
                         self.next_orders = algo_orders + self.next_orders
