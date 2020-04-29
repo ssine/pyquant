@@ -194,7 +194,19 @@ class Future:
                         self.sell_book[order.price] = OrderQueue(order.price)
                     self.sell_book[order.price].add_order(order)
         elif order.order_type == OrderType.MARKET:
-            pass
+            if order.is_history:
+                # not possible
+                return
+            if order.direction == Direction.LONG and order.offset == Offset.OPEN or order.direction == Direction.SHORT and order.offset == Offset.CLOSE:
+                sell_prices = list(self.sell_book.keys())
+                order.callback() if hasattr(order, 'callback') else None
+                order_fill_list.append(TradeData(order.order_id, sell_prices[0], order.volume))
+                order.volume = 0
+            elif order.direction == Direction.SHORT and order.offset == Offset.OPEN or order.direction == Direction.LONG and order.offset == Offset.CLOSE:
+                buy_prices = list(reversed(self.buy_book.keys()))
+                order.callback() if hasattr(order, 'callback') else None
+                order_fill_list.append(TradeData(order.order_id, buy_prices[0], order.volume))
+                order.volume = 0
         else:
             pass
 
@@ -246,7 +258,7 @@ class Exchange:
         self.order_account = {}
 
     def add_account(self, name: str, balance: float = 0):
-        self.accounts[name] = Account(name, balance)
+        self.accounts[name] = Account(name, balance, self.futures.keys())
 
     def get_accounts(self):
         return self.accounts
@@ -303,19 +315,19 @@ class Exchange:
                 if order.direction == Direction.LONG and order.offset == Offset.OPEN:
                     # print(f'long open, balance - {fill.fill_amount * fill.price}')
                     account.balance -= fill.fill_amount * fill.price
-                    account.long_position += fill.fill_amount
+                    account.position[order.symbol]['long'] += fill.fill_amount
                 elif order.direction == Direction.LONG and order.offset == Offset.CLOSE:
                     # print(f'long close, balance + {fill.fill_amount * fill.price}')
                     account.balance += fill.fill_amount * fill.price
-                    account.long_position -= fill.fill_amount
+                    account.position[order.symbol]['long'] -= fill.fill_amount
                 elif order.direction == Direction.SHORT and order.offset == Offset.OPEN:
                     # print(f'short open, balance + {fill.fill_amount * fill.price}')
                     account.balance += fill.fill_amount * fill.price
-                    account.short_position += fill.fill_amount
+                    account.position[order.symbol]['short'] += fill.fill_amount
                 elif order.direction == Direction.SHORT and order.offset == Offset.CLOSE:
                     # print(f'short close, balance - {fill.fill_amount * fill.price}')
                     account.balance -= fill.fill_amount * fill.price
-                    account.short_position -= fill.fill_amount
+                    account.position[order.symbol]['short'] -= fill.fill_amount
         order_fill_list = []
 
 def get_dict_from_tick(tick: TickData, type: str):

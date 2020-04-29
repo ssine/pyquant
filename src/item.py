@@ -9,14 +9,14 @@ logger = logging.getLogger('item')
 class Account:
     name: str
     balance: float
-    long_position: float
-    short_position: float
+    position: Dict[str, Dict[str, float]]
 
-    def __init__(self, name: str, balance = 0, long_position = 0, short_position = 0):
+    def __init__(self, name: str, balance = 0, symbols: List[str] = []):
         self.name = name
         self.balance = balance
-        self.long_position = long_position
-        self.short_position = short_position
+        self.position = {}
+        for s in symbols:
+            self.position[s] = {'long': 0, 'short': 0}
 
 class TickData:
     symbol: str
