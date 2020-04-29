@@ -10,12 +10,18 @@ from strategy import BaseStrategy
 import matplotlib.pyplot as plt
 
 #%%
-df = get_tradeblazer_df(os.path.join(os.path.dirname(__file__), '../data/IF888_Tick.csv'))
+eng = Engine()
+df = eng.load_data('tb', os.path.join(os.path.dirname(__file__), '../data/IF888_Tick.csv'), 'IF888')
+
 
 # %%
-df['lastPrice']
+df
 
 # %%
-plt.plot(range(len(df['lastPrice'])), df['lastPrice'])
+df['lastPrice'].max()
+
+# %%
+df['lastPrice'].min()
+
 
 # %%
