@@ -68,7 +68,7 @@ class BaseStrategy:
             'volume': volume,
             'is_history': False,
             'order_type': OrderType.LIMIT,
-            'direction': Direction.LONG,
+            'direction': Direction.SHORT,
             'offset': Offset.CLOSE,
             'callback': callback,
         }, 'test')
