@@ -1,33 +1,51 @@
 import pandas as pd
 import numpy as np
 import matplotlib
+import os
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import collections, sortedcontainers
 from tqdm import tqdm
 
-def draw_order_book(all_data):
-    price_data = all_data[['SP1', 'SP2', 'SP3', 'SP4', 'SP5', 'BP1', 'BP2', 'BP3', 'BP4', 'BP5']]
-    volumn_data = all_data[['SV1', 'SV2', 'SV3', 'SV4', 'SV5', 'BV1', 'BV2', 'BV3', 'BV4', 'BV5']]
-    min_price = price_data.min().min()
-    max_price = price_data.max().max()
-    
-    def price_idx(price):
-        return int((price - min_price) * 2) 
-    
-    price_interval = max_price - min_price
-    
-    norm = matplotlib.colors.Normalize(vmin=volumn_data.min().min(), vmax=volumn_data.max().max(), clip=True)
-    buy_mapper = cm.ScalarMappable(norm=norm, cmap=cm.Reds)
-    sell_mapper = cm.ScalarMappable(norm=norm, cmap=cm.Blues)
+def i_rb_asset():
+    df = pd.read_csv(os.path.join(os.path.dirname(__file__), '../data/i_rb_aligned.csv'), index_col=0)
 
-    matrix = np.ones((int(price_interval * 2) + 1, price_data.shape[0], 3))
-    idx = 0
-    for _, row in all_data.iterrows():
-        for i in range(1, 6):
-            matrix[price_idx(row[f'BP{i}']), idx] = buy_mapper.to_rgba(row[f'BV{i}'])[:-1]
-            matrix[price_idx(row[f'SP{i}']), idx] = sell_mapper.to_rgba(row[f'SV{i}'])[:-1]
-        idx += 1
-    plt.imshow(matrix, cmap=plt.get_cmap('Blues'))
-    plt.gca().invert_yaxis()
+    lp = df['i9888_price'].values - df['rb888_price'].values
+    print(lp.min(), lp.max())
+    xs = range(len(lp))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    ax.plot(xs, lp, label='rb - i', color='orange')
+
+    ax2 = ax.twinx()
+    ax2.plot(xs, df['asset'].values, label='asset')
+
+    # ask matplotlib for the plotted objects and their labels
+    lines, labels = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines + lines2, labels + labels2, loc=0)
     plt.show()
+
+def i_rb():
+    df = pd.read_csv(os.path.join(os.path.dirname(__file__), '../data/i_rb_aligned.csv'), index_col=0)
+
+    lp = df['rb888_price'].values
+    xs = range(len(lp))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    ax.plot(xs, lp, label='rb', color='orange')
+
+    ax2 = ax.twinx()
+    ax2.plot(xs, df['i9888_price'].values, label='i')
+
+    # ask matplotlib for the plotted objects and their labels
+    lines, labels = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines + lines2, labels + labels2, loc=0)
+    plt.show()
+
+i_rb_asset()
