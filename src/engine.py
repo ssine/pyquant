@@ -19,6 +19,7 @@ class Engine:
     Engine aggregates basic functions, it loads data, drives simulator and
     supports strategies.
     '''
+    current_time: dt.datetime
     def __init__(self):
         self.tick_data = {}
         self.tick_order = {}
@@ -28,6 +29,7 @@ class Engine:
         self.tracking_account_symbols = {} # balance, long pos, short pos
         self.exchange = None
         self.strategy = None
+        self.current_time = None
 
     def load_data(self, tp: str, filename: str, symbol: str, opts = {}):
         df = None
@@ -71,6 +73,7 @@ class Engine:
         for syn in self.tracking_account_symbols[account_name]:
             cols.append(f'{syn}_long')
             cols.append(f'{syn}_short')
+            cols.append(f'{syn}_price')
         df = pd.DataFrame(self.tracking_accounts[account_name], columns=cols)
         df.to_csv(filename)
 
@@ -93,6 +96,7 @@ class Engine:
         if earlist_symbol == '':
             print('backtesting finished')
             return None
+        self.current_time = earlist_time
         self.tick_idx[earlist_symbol] += 1
         # logger.debug('-----------')
         # logger.debug(f'stepping {earlist_symbol}')
@@ -124,6 +128,7 @@ class Engine:
                 lst[1] += (acc.position[sym]['long'] - acc.position[sym]['short']) * tk[sym].last_price
                 lst.append(acc.position[sym]['long'])
                 lst.append(acc.position[sym]['short'])
+                lst.append(tk[sym].last_price)
             self.tracking_accounts[accn].append(lst)
         self.strategy.on_tick(tk)
         # logger.debug('tick after:')
@@ -133,10 +138,10 @@ class Engine:
     def amend_tick_data(self, tick):
         # fill in last trade info in a tick
         for sym in self.symbols:
-            if self.tick_idx[sym] > 0:
-                original = self.tick_data[sym][self.tick_idx[sym]]
-                setattr(tick[sym], 'last_price', original.last_price)
-                setattr(tick[sym], 'last_volume', original.last_volume)
+            # if self.tick_idx[sym] > 0:
+            original = self.tick_data[sym][self.tick_idx[sym]]
+            setattr(tick[sym], 'last_price', original.last_price)
+            setattr(tick[sym], 'last_volume', original.last_volume)
         return tick
 
     def verify_tick(self, tick):
@@ -167,13 +172,15 @@ class Engine:
         tick_count = 0
         for symbol in self.symbols:
             tick_count += len(self.tick_order[symbol])
+        account_covered = False
         for idx in tqdm(range(tick_count), desc='backtest'):
             tk = self.step()
             if tk is None:
                 return
-            if tick_count - idx < 3:
-                if tick_count - idx == 2:
-                    # cover account forcebly
+            if self.current_time.hour >= 14 and self.current_time.minute >= 57:
+                # cover account every day
+                # if not account_covered:
+                if False:
                     acc = self.exchange.accounts['test']
                     for sym in acc.position.keys():
                         self.exchange.place_order({
@@ -192,9 +199,7 @@ class Engine:
                             'direction': Direction.SHORT,
                             'offset': Offset.CLOSE,
                         }, 'test')
+                    account_covered = True
             else:
                 self.strategy.on_tick(tk)
-            if self.exchange.accounts['test'].balance < 200:
-                print('no enough balance, break')
-                break
-            
+                account_covered = False
